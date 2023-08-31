@@ -138,16 +138,16 @@ if __name__ == '__main__':
 
         wait = WebDriverWait(driver, 10)
         driver.switch_to.window(driver.window_handles[-1])
-        input_element = wait.until(EC.presence_of_element_located((By.ID, 'login-username')))
-        input_element.clear()
-        input_element.send_keys("USERNAME")
+        username = wait.until(EC.presence_of_element_located((By.ID, 'login-username')))
+        username.clear()
+        username.send_keys("USERNAME")
 
-        input_element = driver.find_element(By.ID, "login-password")
-        input_element.clear()
-        input_element.send_keys("PASSWORD")
+        password = driver.find_element(By.ID, "login-password")
+        password.clear()
+        password.send_keys("PASSWORD")
 
-        input_element = driver.find_element(By.ID, "login-button")
-        input_element.click()
+        login = driver.find_element(By.ID, "login-button")
+        login.click()
 
         time.sleep(5)
     finally:
