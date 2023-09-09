@@ -1,4 +1,8 @@
-import threading, time, os, signal, requests
+import threading
+import time
+import os
+import signal
+import requests
 from flask import Flask, request, session, redirect, url_for, jsonify
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -12,8 +16,47 @@ app = Flask(__name__)
 
 # Configure session settings
 app.config['SESSION_COOKIE_NAME'] = 'Spotify Cookie'
-app.secret_key = 'SECRET KEY'
+# DO: Set secret key
+app.secret_key = ''
 TOKEN_INFO = 'token_info'
+
+# Function to create Spotify OAuth instance
+def create_spotify_oauth():
+    return SpotifyOAuth(
+        # DO: Enter client_id and client_secret
+        client_id='',
+        client_secret='',
+        redirect_uri=url_for('redirect_page', _external=True),
+        scope='user-library-read playlist-modify-public playlist-modify-private'
+    )
+
+# Function to run the Flask app
+def run_flask_app():
+    app.run()
+
+# Function to initialize the Selenium driver
+def initialize_driver():
+    options = webdriver.ChromeOptions()
+    # options.headless = True
+    driver = webdriver.Chrome(options=options)
+    return driver
+
+# Function to perform the login using Selenium
+def perform_login(driver):
+    driver.execute_script("window.open('http://127.0.0.1:5000/', '_blank');")
+    wait = WebDriverWait(driver, 10)
+    driver.switch_to.window(driver.window_handles[-1])
+    username = wait.until(EC.presence_of_element_located((By.ID, 'login-username')))
+    username.clear()
+    # DO: Enter username
+    username.send_keys("")
+    password = driver.find_element(By.ID, "login-password")
+    password.clear()
+    # Do: Enter password
+    password.send_keys("")
+    login = driver.find_element(By.ID, "login-button")
+    login.click()
+    time.sleep(5)
 
 # Route to handle logging in
 @app.route('/')
@@ -32,7 +75,6 @@ def redirect_page():
     # Exchange code for access token and save in session
     token_info = create_spotify_oauth().get_access_token(code)
     session[TOKEN_INFO] = token_info
-    
     return redirect(url_for('save_discover_weekly', _external=True))
 
 # Route to save the Discover Weekly songs to a playlist
@@ -44,12 +86,9 @@ def save_discover_weekly():
     except:
         # Redirect user to login if token info not found
         return redirect("/")
-    
-    # Create Spotipy instance with access token
+
     sp = spotipy.Spotify(auth=token_info['access_token'])
     user_id = sp.current_user()['id']
-
-    # Find or create playlist IDs
     discover_weekly_playlist_id, saved_weekly_playlist_id = find_playlist_ids(sp.current_user_playlists()['items'])
 
     if not discover_weekly_playlist_id:
@@ -58,14 +97,12 @@ def save_discover_weekly():
     if not saved_weekly_playlist_id:
         saved_weekly_playlist_id = create_saved_weekly_playlist(sp, user_id)
 
-    # Get tracks from playlists and check for duplicates
     discover_weekly_tracks = sp.playlist_items(discover_weekly_playlist_id)['items']
     saved_weekly_tracks = sp.user_playlist_tracks(user_id, saved_weekly_playlist_id)['items']
-    saved_weekly_uris = [track['track']['uri'] for track in saved_weekly_tracks]
+    saved_weekly_uris = {track['track']['uri'] for track in saved_weekly_tracks}
 
     song_uris = [song['track']['uri'] for song in discover_weekly_tracks if song['track']['uri'] not in saved_weekly_uris]
 
-    # Add new tracks to the saved weekly playlist
     if song_uris:
         sp.user_playlist_add_tracks(user_id, saved_weekly_playlist_id, song_uris)
 
@@ -102,58 +139,19 @@ def get_token():
 
     return token_info
 
-# Function to create Spotify OAuth instance
-def create_spotify_oauth():
-    return SpotifyOAuth(
-        client_id='CLIENT ID',
-        client_secret='SECRET ID',
-        redirect_uri=url_for('redirect_page', _external=True),
-        scope='user-library-read playlist-modify-public playlist-modify-private'
-    )
-
 # Route to stop the server
 @app.route('/stopServer', methods=['GET'])
 def stop_server():
     os.kill(os.getpid(), signal.SIGINT)
     return jsonify({"success": True, "message": "Server is shutting down..."})
 
-# Function to run the Flask app in a separate thread
-def run_flask_app():
-    app.run()
-
-# Main entry point
 if __name__ == '__main__':
-    # Start Flask app in a separate thread
     flask_thread = threading.Thread(target=run_flask_app)
     flask_thread.start()
-
-    # Configure Selenium WebDriver
-    options = webdriver.ChromeOptions()
-    options.headless = True
-    driver = webdriver.Chrome(options=options)
+    driver = initialize_driver()
 
     try:
-        # Open the Spotify login page using Selenium
-        driver.execute_script("window.open('http://localhost:5000/', '_blank');")
-
-        wait = WebDriverWait(driver, 10)
-        driver.switch_to.window(driver.window_handles[-1])
-        username = wait.until(EC.presence_of_element_located((By.ID, 'login-username')))
-        username.clear()
-        username.send_keys("USERNAME")
-
-        password = driver.find_element(By.ID, "login-password")
-        password.clear()
-        password.send_keys("PASSWORD")
-
-        login = driver.find_element(By.ID, "login-button")
-        login.click()
-
-        time.sleep(5)
+        perform_login(driver)
     finally:
-        # Close browser window and stop the Flask server
-        for handle in driver.window_handles:
-            driver.switch_to.window(handle)
-            driver.close()
-
-        requests.get('http://localhost:5000/stopServer')
+        driver.quit()
+        requests.get('http://127.0.0.1:5000/stopServer')
